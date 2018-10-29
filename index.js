@@ -26,8 +26,6 @@ app.post('/', function (req, res) {
     }
 })
 
-handleRequest('401070728', '3')
-
 function handleRequest(gameID, newShots) {
     getShots(gameID).then(function(oldShots) {
         newShots = Number(newShots)
