@@ -21,37 +21,46 @@ app.post('/', function (req, res) {
         res.status(401)
         res.send({ message: 'incorrect token' })
     } else {
-        handleRequest(gameID, shots)
-        res.send({ message: 'Success' })
+        handleRequest(gameID, shots).then(function(response) {
+            res.send({ message: 'Success' })
+        }).catch(function(error) {
+            res.send({ message: error })
+        })
     }
 })
 
 function handleRequest(gameID, newShots) {
-    getShots(gameID).then(function(oldShots) {
-        newShots = Number(newShots)
-        oldShots = Number(oldShots)
-        const shotDiffArray = getShotDifferenceArray(newShots, oldShots)
-        if (Array.isArray(shotDiffArray) && shotDiffArray.length) {
-            putShotsInDatabase(gameID, shotDiffArray[shotDiffArray.length-1])
-            tweetArray(shotDiffArray)
-        } else {
-            //No new info
-            console.log(`Nothing new to update: ${oldShots}`)
-        }
-    }).catch(function(error) {
-        console.log(error)
-        console.log('Error getting shots in handleRequest')
+    return new Promise(function (resolve, reject) {
+        getShots(gameID).then(function (oldShots) {
+            newShots = Number(newShots)
+            oldShots = Number(oldShots)
+            const shotDiffArray = getShotDifferenceArray(newShots, oldShots)
+            if (Array.isArray(shotDiffArray) && shotDiffArray.length) {
+                let requests = []
+                requests.push(putShotsInDatabase(gameID, shotDiffArray[shotDiffArray.length - 1]))
+                requests.push(tweetArray(shotDiffArray))
+                Promise.all(requests).then(function(response) {
+                    resolve('Success handling the request')
+                }).catch(function(error) {
+                    reject('Error during DB/Twitter step')
+                })
+            } else {
+                //No new info
+                resolve(`Nothing new to update: ${oldShots}`)
+            }
+        }).catch(function (error) {
+            console.log(error)
+            console.log('Error getting shots in handleRequest')
+        })
     })
 }
 
 function tweetArray(shotArray) {
-    shotArray.forEach(function(shot) {
-        tweet(shot).then(function(response) {
-            console.log(response)
-        }).catch(function(error) {
-            console.log(error)
-        })
+    let requests = []
+    shotArray.forEach(function (shot) {
+        requests.push(tweet(shot))
     })
+    return Promise.all(requests)
 }
 
 function tweet(amount) {
@@ -65,11 +74,11 @@ function tweet(amount) {
         json: true // Automatically stringifies the body to JSON
     };
 
-    return new Promise(function(resolve, reject) {
-        rp.post(options).then(function(response) {
+    return new Promise(function (resolve, reject) {
+        rp.post(options).then(function (response) {
             console.log('Success', response)
             resolve('Success posting tweet')
-        }).catch(function(error) {
+        }).catch(function (error) {
             console.log('Error', error)
             reject('Error posting tweet')
         })
@@ -77,10 +86,9 @@ function tweet(amount) {
 }
 
 function getShotDifferenceArray(newShots, oldShots) {
-    return Array(newShots).fill(oldShots).map((e,i)=>i+1).filter((x)=>x>oldShots)
+    return Array(newShots).fill(oldShots).map((e, i) => i + 1).filter((x) => x > oldShots)
 }
 
-//putShotsInDatabase('401070728', '2')
 function putShotsInDatabase(gameID, shots) {
     gameID = gameID.toString()
     shots = shots.toString()
@@ -92,12 +100,14 @@ function putShotsInDatabase(gameID, shots) {
         }
     }
 
-    ddb.putItem(params, function (err, data) {
-        if (err) {
-            console.log("Error", err)
-        } else {
-            console.log("Success", data)
-        }
+    return new Promise(function (resolve, reject) {
+        ddb.putItem(params, function (err, data) {
+            if (err) {
+                reject(err)
+            } else {
+                resolve(data)
+            }
+        })
     })
 }
 
