@@ -10,6 +10,8 @@ const app = express()
 app.use(bodyParser.json())
 const PORT = 3001
 const TABLE_NAME = 'ice-trae-bot'
+const SHOT_MADE_ROUTE = '/shotMade'
+const GAME_START_ROUTE = '/gameStart'
 
 app.get('/', (req, res) => res.send('Validator Bot Running'))
 
@@ -17,36 +19,49 @@ app.post('/', function (req, res) {
     const token = req.body.token
     const gameID = req.body.gameID
     const shots = req.body.shots
+    const opponent = req.body.opponent
     if (token !== process.env.API_TOKEN) {
         res.status(401)
         res.send({ message: 'incorrect token' })
     } else {
-        handleRequest(gameID, shots).then(function(response) {
+        handleRequest(gameID, shots, opponent).then(function (response) {
             res.send({ message: 'Success' })
-        }).catch(function(error) {
+        }).catch(function (error) {
             res.send({ message: error })
         })
     }
 })
 
-function handleRequest(gameID, newShots) {
+function handleRequest(gameID, newShots, opponent) {
     return new Promise(function (resolve, reject) {
         getShots(gameID).then(function (oldShots) {
-            newShots = Number(newShots)
-            oldShots = Number(oldShots)
-            const shotDiffArray = getShotDifferenceArray(newShots, oldShots)
-            if (Array.isArray(shotDiffArray) && shotDiffArray.length) {
-                let requests = []
-                requests.push(putShotsInDatabase(gameID, shotDiffArray[shotDiffArray.length - 1]))
-                requests.push(tweetArray(shotDiffArray))
-                Promise.all(requests).then(function(response) {
-                    resolve('Success handling the request')
-                }).catch(function(error) {
-                    reject('Error during DB/Twitter step')
-                })
+            if (oldShots) {
+                newShots = Number(newShots)
+                oldShots = Number(oldShots)
+                const shotDiffArray = getShotDifferenceArray(newShots, oldShots)
+                if (Array.isArray(shotDiffArray) && shotDiffArray.length) {
+                    let requests = []
+                    requests.push(putShotsInDatabase(gameID, shotDiffArray[shotDiffArray.length - 1]))
+                    requests.push(tweetArray(shotDiffArray))
+                    Promise.all(requests).then(function (response) {
+                        resolve('Success handling the request')
+                    }).catch(function (error) {
+                        reject('Error during DB/Twitter step')
+                    })
+                } else {
+                    //No new info
+                    resolve(`Nothing new to update: ${oldShots}`)
+                }
             } else {
-                //No new info
-                resolve(`Nothing new to update: ${oldShots}`)
+                //Game just starting
+                let requests = []
+                requests.push(putShotsInDatabase(gameID, 0))
+                requests.push(tweetGameStart(opponent))
+                Promise.all(requests).then(function (response) {
+                    resolve('Success game start')
+                }).catch(function (error) {
+                    reject('Error during DB/Twitter step', error)
+                })
             }
         }).catch(function (error) {
             console.log(error)
@@ -58,22 +73,38 @@ function handleRequest(gameID, newShots) {
 function tweetArray(shotArray) {
     let requests = []
     shotArray.forEach(function (shot) {
-        requests.push(tweet(shot))
+        requests.push(tweetShotMade(shot))
     })
     return Promise.all(requests)
 }
 
-function tweet(amount) {
+function tweetShotMade(amount) {
     const options = {
         method: 'POST',
-        uri: process.env.TWITTER_API_URL,
+        uri: process.env.TWITTER_API_URL + SHOT_MADE_ROUTE,
         body: {
             amount: amount,
             token: process.env.API_TOKEN
         },
-        json: true // Automatically stringifies the body to JSON
+        json: true
     };
+    return tweet(options)
+}
 
+function tweetGameStart(opponent) {
+    const options = {
+        method: 'POST',
+        uri: process.env.TWITTER_API_URL + GAME_START_ROUTE,
+        body: {
+            opponent: opponent,
+            token: process.env.API_TOKEN
+        },
+        json: true
+    };
+    return tweet(options)
+}
+
+function tweet(options) {
     return new Promise(function (resolve, reject) {
         rp.post(options).then(function (response) {
             console.log('Success', response)
@@ -129,7 +160,7 @@ function getShots(gameID) {
                 if (data.Item) {
                     resolve(data.Item.shots.S)
                 } else {
-                    resolve('0')
+                    resolve(null)
                 }
             }
         })
