@@ -84,6 +84,7 @@ function tweetShotMade(amount) {
         uri: process.env.TWITTER_API_URL + SHOT_MADE_ROUTE,
         body: {
             amount: amount,
+            slack: true,
             token: process.env.API_TOKEN
         },
         json: true
@@ -97,6 +98,7 @@ function tweetGameStart(opponent) {
         uri: process.env.TWITTER_API_URL + GAME_START_ROUTE,
         body: {
             opponent: opponent,
+            slack: true,
             token: process.env.API_TOKEN
         },
         json: true
