@@ -9,8 +9,7 @@ require('dotenv').config()
 const app = express()
 app.use(bodyParser.json())
 const PORT = 3001
-const TABLE_NAME = 'ice-trae-bot'
-const SHOT_MADE_ROUTE = '/shotMade'
+const SHOT_MADE_ROUTE = '/emojis'
 const GAME_START_ROUTE = '/gameStart'
 
 app.get('/', (req, res) => res.send('Validator Bot Running'))
@@ -84,7 +83,7 @@ function tweetShotMade(amount) {
         uri: process.env.TWITTER_API_URL + SHOT_MADE_ROUTE,
         body: {
             amount: amount,
-            slack: true,
+            slack: process.env.SLACK,
             token: process.env.API_TOKEN
         },
         json: true
@@ -98,7 +97,7 @@ function tweetGameStart(opponent) {
         uri: process.env.TWITTER_API_URL + GAME_START_ROUTE,
         body: {
             opponent: opponent,
-            slack: true,
+            slack: process.env.SLACK,
             token: process.env.API_TOKEN
         },
         json: true
@@ -126,7 +125,7 @@ function putShotsInDatabase(gameID, shots) {
     gameID = gameID.toString()
     shots = shots.toString()
     var params = {
-        TableName: TABLE_NAME,
+        TableName: process.env.TABLE_NAME,
         Item: {
             gameID: { S: gameID },
             shots: { S: shots },
@@ -146,7 +145,7 @@ function putShotsInDatabase(gameID, shots) {
 
 function getShots(gameID) {
     var params = {
-        TableName: TABLE_NAME,
+        TableName: process.env.TABLE_NAME,
         Key: {
             gameID: { S: gameID },
         }
