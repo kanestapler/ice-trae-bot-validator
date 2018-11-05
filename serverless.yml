@@ -12,3 +12,7 @@ functions:
     events:
       - http: ANY /
       - http: 'ANY {proxy+}'
+
+package:
+  exclude:
+    - .env
